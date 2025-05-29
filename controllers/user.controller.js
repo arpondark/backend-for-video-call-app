@@ -1,5 +1,7 @@
 import User from "../MODELS/User.js";
 import FriendRequest from "../MODELS/FriendRequest.js";
+import { uploadToCloudinary, deleteFromCloudinary } from "../lib/cloudinary.js";
+import { upsertStreamUser } from "../lib/stream.js";
 
 export async function getRecommendedUsers(req, res) {
   try {
@@ -143,6 +145,113 @@ export async function getOutgoingFriendReqs(req, res) {
     res.status(200).json(outgoingRequests);
   } catch (error) {
     console.log("Error in getOutgoingFriendReqs controller", error.message);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+}
+
+export async function uploadProfilePicture(req, res) {
+  try {
+    const userId = req.user._id;
+    
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    // Upload to Cloudinary
+    const uploadResult = await uploadToCloudinary(req.file.buffer);
+    
+    if (!uploadResult.success) {
+      return res.status(500).json({ message: "Failed to upload image: " + uploadResult.error });
+    }
+
+    // Get current user to check if they have an existing profile picture
+    const currentUser = await User.findById(userId);
+    
+    // If user has existing profile picture and it's from Cloudinary, delete it
+    if (currentUser.profilePic && currentUser.profilePic.includes("cloudinary.com")) {
+      // Extract public_id from the URL
+      const urlParts = currentUser.profilePic.split("/");
+      const publicIdWithExtension = urlParts[urlParts.length - 1];
+      const publicId = "profile-pictures/" + publicIdWithExtension.split(".")[0];
+      
+      await deleteFromCloudinary(publicId);
+    }
+
+    // Update user with new profile picture
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { profilePic: uploadResult.url },
+      { new: true }
+    ).select("-password");
+
+    // Update Stream user as well
+    try {
+      await upsertStreamUser({
+        id: updatedUser._id.toString(),
+        name: updatedUser.fullName,
+        image: updatedUser.profilePic,
+      });
+    } catch (streamError) {
+      console.log("Error updating Stream user profile picture:", streamError.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Profile picture updated successfully",
+      user: updatedUser,
+      imageUrl: uploadResult.url
+    });
+
+  } catch (error) {
+    console.error("Error in uploadProfilePicture controller:", error.message);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+}
+
+export async function removeProfilePicture(req, res) {
+  try {
+    const userId = req.user._id;
+    const currentUser = await User.findById(userId);
+
+    // If user has a Cloudinary profile picture, delete it
+    if (currentUser.profilePic && currentUser.profilePic.includes("cloudinary.com")) {
+      const urlParts = currentUser.profilePic.split("/");
+      const publicIdWithExtension = urlParts[urlParts.length - 1];
+      const publicId = "profile-pictures/" + publicIdWithExtension.split(".")[0];
+      
+      await deleteFromCloudinary(publicId);
+    }
+
+    // Generate a new random avatar
+    const idx = Math.floor(Math.random() * 100) + 1;
+    const randomAvatar = `https://avatar.iran.liara.run/public/${idx}.png`;
+
+    // Update user with default avatar
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { profilePic: randomAvatar },
+      { new: true }
+    ).select("-password");
+
+    // Update Stream user as well
+    try {
+      await upsertStreamUser({
+        id: updatedUser._id.toString(),
+        name: updatedUser.fullName,
+        image: updatedUser.profilePic,
+      });
+    } catch (streamError) {
+      console.log("Error updating Stream user profile picture:", streamError.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Profile picture removed successfully",
+      user: updatedUser
+    });
+
+  } catch (error) {
+    console.error("Error in removeProfilePicture controller:", error.message);
     res.status(500).json({ message: "Internal Server Error" });
   }
 }

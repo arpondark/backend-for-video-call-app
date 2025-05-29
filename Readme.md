@@ -86,6 +86,11 @@ JWT_SECRET=your-super-secret-jwt-key
 # Stream Chat (Get from Stream Dashboard)
 STREAM_API_KEY=your-stream-api-key
 STREAM_API_SECRET=your-stream-api-secret
+
+# Cloudinary (Get from Cloudinary Dashboard)
+CLOUDINARY_CLOUD_NAME=your-cloudinary-cloud-name
+CLOUDINARY_API_KEY=your-cloudinary-api-key
+CLOUDINARY_API_SECRET=your-cloudinary-api-secret
 ```
 
 ### 4. Start the server
@@ -186,61 +191,131 @@ Authorization: Bearer <token>
 
 #### Get Outgoing Friend Requests
 ```http
-GET /users/outgoing-requests
+GET /users/outgoing-friend-requests
 Authorization: Bearer <token>
 ```
 
-## 🗄️ Database Schema
+### Profile Image Management Endpoints
 
-### User Model
-```javascript
+#### Upload Profile Image
+```http
+POST /users/upload-profile-picture
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+
+Form Data:
+- profilePic: [image file] (required)
+  - Supported formats: JPEG, PNG, GIF, WebP, BMP
+  - Maximum file size: 5MB
+  - Field name must be "profilePic"
+```
+
+**Response (Success):**
+```json
 {
-  fullName: String (required),
-  email: String (required, unique),
-  password: String (required, min: 6),
-  bio: String,
-  profilePic: String,
-  nativeLanguage: String,
-  learningLanguage: String,
-  location: String,
-  isOnboarded: Boolean (default: false),
-  friends: [ObjectId] (ref: User),
-  timestamps: true
+  "success": true,
+  "message": "Profile picture updated successfully",
+  "user": {
+    "_id": "user_id",
+    "fullName": "John Doe",
+    "email": "john@example.com",
+    "profilePic": "https://res.cloudinary.com/your-cloud/image/upload/v1234567890/profile-pictures/abc123.jpg",
+    "bio": "Language enthusiast",
+    "nativeLanguage": "English",
+    "learningLanguage": "Spanish",
+    "location": "New York, USA",
+    "isOnboarded": true
+  },
+  "imageUrl": "https://res.cloudinary.com/your-cloud/image/upload/v1234567890/profile-pictures/abc123.jpg"
 }
 ```
 
-### FriendRequest Model
-```javascript
+**Error Responses:**
+```json
+// File too large
 {
-  sender: ObjectId (ref: User, required),
-  recipient: ObjectId (ref: User, required),
-  status: String (enum: ['pending', 'accepted', 'rejected'], default: 'pending'),
-  timestamps: true
+  "message": "File too large. Maximum size is 5MB."
+}
+
+// Invalid file type
+{
+  "message": "Only image files are allowed!"
+}
+
+// No file provided
+{
+  "message": "No file uploaded"
+}
+
+// Upload failed
+{
+  "message": "Failed to upload image: [error details]"
+}
+
+// Authentication error
+{
+  "message": "Unauthorized - No token provided"
 }
 ```
 
-## 🔐 Authentication & Security
+#### Remove Profile Image
+```http
+DELETE /users/remove-profile-picture
+Authorization: Bearer <token>
+```
 
-- **JWT Tokens**: Secure authentication with 7-day expiration
-- **HTTP-Only Cookies**: Tokens stored in secure, HTTP-only cookies
-- **Password Hashing**: bcryptjs with salt rounds for password security
-- **Input Validation**: Email format validation and password requirements
-- **CORS Protection**: Configured for cross-origin requests
-- **Environment Variables**: Sensitive data stored securely
+**Response (Success):**
+```json
+{
+  "success": true,
+  "message": "Profile picture removed successfully",
+  "user": {
+    "_id": "user_id",
+    "fullName": "John Doe",
+    "email": "john@example.com",
+    "profilePic": "https://avatar.iran.liara.run/public/42.png",
+    "bio": "Language enthusiast",
+    "nativeLanguage": "English",
+    "learningLanguage": "Spanish",
+    "location": "New York, USA",
+    "isOnboarded": true
+  }
+}
+```
 
-## 🚦 Middleware
+### Chat Endpoints
 
-### Authentication Middleware
-- `protectRoute`: Verifies JWT tokens and adds user to request object
-- Used on protected endpoints requiring authentication
+#### Get Stream Chat Token
+```http
+GET /chat/token
+Authorization: Bearer <token>
+```
 
-## 📱 Stream Chat Integration
+## 🖼️ Cloudinary Integration
 
-The application integrates with Stream Chat for real-time messaging:
+The application uses Cloudinary for image storage and optimization:
 
-- **User Sync**: Automatically creates/updates Stream users on registration
-- **Profile Sync**: Updates Stream user data during onboarding
-- **Chat Tokens**: Generates Stream chat tokens for authenticated users
+### Features
+- **Automatic Optimization**: Images are automatically optimized for web delivery
+- **Transformation**: Profile images are resized to 400x400 pixels with face detection
+- **Secure Storage**: Images stored securely in the cloud
+- **CDN Delivery**: Fast global content delivery
+- **Smart Cropping**: Automatic cropping with gravity focus on faces
+
+### Image Processing Pipeline
+1. **Upload**: Image received via multipart/form-data
+2. **Validation**: File type and size validation
+3. **Memory Storage**: Temporarily stored in server memory
+4. **Cloudinary Upload**: Streamed to Cloudinary with transformations
+5. **Database Update**: User profile updated with new image URL
+6. **Old Image Cleanup**: Previous Cloudinary image deleted (if exists)
+7. **Stream Sync**: Profile image synced with Stream Chat service
+
+### Transformations Applied
+- **Resize**: 400x400 pixels
+- **Crop**: Fill with face gravity detection
+- **Quality**: Auto-optimized for best performance
+- **Format**: Auto-optimized format selection
 
 ## 🧪 Testing the API
 

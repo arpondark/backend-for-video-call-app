@@ -1,5 +1,6 @@
 import express from "express";
 import { protectRoute } from "../middlewares/auth.middleware.js";
+import { uploadSingle, handleUploadError } from "../middlewares/upload.middleware.js";
 import {
   acceptFriendRequest,
   getFriendRequests,
@@ -7,6 +8,8 @@ import {
   getOutgoingFriendReqs,
   getRecommendedUsers,
   sendFriendRequest,
+  uploadProfilePicture,
+  removeProfilePicture,
 } from "../controllers/user.controller.js";
 
 const router = express.Router();
@@ -22,5 +25,9 @@ router.put("/friend-request/:id/accept", acceptFriendRequest);
 
 router.get("/friend-requests", getFriendRequests);
 router.get("/outgoing-friend-requests", getOutgoingFriendReqs);
+
+// Profile picture routes
+router.post("/upload-profile-picture", uploadSingle, handleUploadError, uploadProfilePicture);
+router.delete("/remove-profile-picture", removeProfilePicture);
 
 export default router;
